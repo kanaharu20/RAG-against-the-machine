@@ -10,3 +10,4 @@ __pycache__/
 IR-book-chapters/
 01bool.pdf
 02voc.pdf
+.vscode/
