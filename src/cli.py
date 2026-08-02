@@ -1,2 +1,0 @@
-from fire import fire
-
