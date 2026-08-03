@@ -213,8 +213,11 @@ def chunk_python(
     try:
         tree = ast.parse(text)
     except (SyntaxError, ValueError, RecursionError):
-        spans = _hard_split([(0, len(text))], max_chunk_size)
-        return _to_chunks(text, file_path, spans)
+        return _to_chunks(
+            text,
+            file_path,
+            _hard_split([(0, len(text))], max_chunk_size),
+        )
 
     starts = _line_starts(text)
     length = len(text)

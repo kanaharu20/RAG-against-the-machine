@@ -1,0 +1,13 @@
+[flake8]
+# The subject fixes the lint command to "flake8 .", so the corpus and
+# the virtual environment have to be excluded here: neither is code we
+# wrote, and vLLM alone accounts for tens of thousands of findings.
+exclude =
+    .git,
+    .venv,
+    __pycache__,
+    .mypy_cache,
+    data,
+    build,
+    dist
+max-line-length = 79

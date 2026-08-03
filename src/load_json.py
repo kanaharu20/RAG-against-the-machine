@@ -21,6 +21,24 @@ class DatasetError(Exception):
     """A dataset file could not be read or did not validate."""
 
 
+def summarize_validation_error(error: ValidationError) -> str:
+    """Condense a pydantic error into one readable line.
+
+    The raw error lists every failing field and a documentation link,
+    which drowns the actual cause when a reviewer feeds the CLI a file
+    that is not a dataset at all.
+    """
+    problems = error.errors()
+    if not problems:
+        return "does not match the expected schema"
+    first = problems[0]
+    location = ".".join(str(part) for part in first["loc"]) or "root"
+    more = (
+        f" (and {len(problems) - 1} more)" if len(problems) > 1 else ""
+    )
+    return f"{first['msg']} at {location}{more}"
+
+
 def load_dataset(path: str | Path) -> RagDataset:
     """Read a dataset file into a validated :class:`RagDataset`.
 
@@ -43,5 +61,6 @@ def load_dataset(path: str | Path) -> RagDataset:
         return RagDataset.model_validate_json(raw)
     except ValidationError as error:
         raise DatasetError(
-            f"invalid dataset {file_path}: {error}"
+            f"invalid dataset {file_path}: "
+            f"{summarize_validation_error(error)}"
         ) from error

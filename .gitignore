@@ -1,8 +1,12 @@
+# Distributed material and generated data: the evaluator provides the
+# corpus and produces the index and the outputs during the defense.
 README1.md
 moulinette-fedora
 moulinette-ubuntu
 vllm-0.10.1/
 datasets_public/
+data/processed/
+data/output/
 pycache/
 .venv/
 .mypy_cache/

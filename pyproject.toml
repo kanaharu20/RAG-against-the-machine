@@ -1,7 +1,7 @@
 [project]
 name = "rag"
 version = "0.1.0"
-description = "Add your description here"
+description = "Retrieval-Augmented Generation over the vLLM codebase"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
@@ -9,4 +9,30 @@ dependencies = [
     "flake8>=7.3.0",
     "mypy>=2.3.0",
     "pydantic>=2.13.4",
+    "torch>=2.13.0",
+    "tqdm>=4.70.0",
+    "transformers>=5.14.1",
+]
+
+[tool.mypy]
+# The subject fixes the lint command to "mypy .", so the corpus and the
+# virtual environment are excluded here rather than on the command line.
+exclude = ['^\.venv/', '^data/', '^build/', '^dist/']
+
+[[tool.mypy.overrides]]
+# Python Fire ships no type information, so --strict cannot analyse it.
+module = ["fire.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# transformers exposes untyped methods on the loaded model. Relaxing
+# the rule here rather than with an inline ignore keeps the mandatory
+# lint clean too, since that run does not raise the error at all and
+# would flag the ignore as unused.
+module = ["src.generator"]
+disallow_untyped_calls = false
+
+[dependency-groups]
+dev = [
+    "types-tqdm>=4.70.0.20260731",
 ]
