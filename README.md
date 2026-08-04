@@ -24,12 +24,9 @@ The pipeline has four stages:
 4. **Generating** — produce a grounded answer from that context.
 
 Retrieval quality is measured with recall@k against reference datasets.
-The system currently reaches **87.0% recall@5 on docs questions**
-(threshold 80%) and **58.6% on code questions** (threshold 50%).
-
-> **Status:** stages 1–2 are implemented and measured. Answer generation
-> (stages 3–4, the `answer` and `answer_dataset` commands) is not
-> implemented yet.
+The system reaches **87.0% recall@5 on docs questions** (threshold 80%)
+and **58.6% on code questions** (threshold 50%). Answers are generated
+locally with `Qwen/Qwen3-0.6B`.
 
 ## Instructions
 
@@ -64,7 +61,14 @@ uv run python -m src search_dataset \
 uv run python -m src evaluate \
     --student_search_results_path data/output/search_results/UnansweredQuestions/dataset_docs_public.json \
     --dataset_path data/datasets/AnsweredQuestions/dataset_docs_public.json
+
+# 4. Generate answers from those results
+uv run python -m src answer_dataset \
+    --student_search_results_path data/output/search_results/UnansweredQuestions/dataset_docs_public.json \
+    --save_directory data/output/search_results_and_answer/UnansweredQuestions
 ```
+
+The first run of an `answer` command downloads the model weights.
 
 Always scope `--save_directory` by dataset: the public datasets share
 file names, so writing every run into the same folder would overwrite
@@ -110,6 +114,7 @@ data/output/search_results/<DatasetScope>/<dataset>.json
 | `preprocess.py` | Tokenization, shared by indexing and querying          |
 | `indexer.py`    | Build, persist, load the index; BM25 search            |
 | `retriever.py`  | Batch search, result I/O, recall@k                     |
+| `generator.py`  | Rebuild excerpts, prompt the model, collect answers    |
 | `cli.py`        | Python Fire commands, argument checking, reporting     |
 
 The command layer holds no retrieval logic. Every command is a thin
@@ -249,6 +254,29 @@ so a question like *"the default value for `mlp_bias` in
 The prefix feeds the term statistics only. **The reported character
 range stays exactly the one the chunker produced**, which is what the
 grader compares.
+
+## Answer generation
+
+Retrieval returns locations, not text, so the excerpts are read back
+from disk with the ranges just reported. They are numbered, filled
+greedily until a token budget is reached — results arrive best first,
+so the budget keeps the most relevant ones — and handed to
+`Qwen/Qwen3-0.6B` with an instruction to answer from them alone.
+
+Decoding is greedy, so the same search results always yield the same
+answers. Together with the sorted corpus walk and the tie-break on
+chunk index in scoring, the whole pipeline is reproducible.
+
+**Reasoning mode is disabled.** Qwen3 emits a `<think>` block by
+default. At 0.6B parameters that block consumes the entire generation
+budget: asked `what is 2+2?`, the model spent 120 tokens deliberating
+and never reached an answer, while the same prompt with thinking off
+answered correctly in 9 tokens and a fraction of the time. Every
+generation call therefore passes `enable_thinking=False`.
+
+Generation takes about 3.8 seconds per question on CPU, roughly six
+minutes for a hundred-question dataset. The subject sets no time limit
+on this stage.
 
 ## Performance analysis
 
@@ -440,6 +468,13 @@ against the code reference reported a clean `0.000`. The command now
 counts comparable questions first and refuses to report a figure when
 none exist.
 
+**A small model that thinks instead of answering.** The first
+generation attempts returned nothing usable, because Qwen3 reasons
+aloud by default and 0.6B parameters produce a lot of reasoning. The
+symptom looked like a prompt problem and was not one; comparing the two
+modes on a trivial arithmetic question made the cause obvious in a
+single run.
+
 **`flake8 .` and `mypy .` scan everything.** The mandated lint commands
 take no flags, and run as-is they report 36,176 findings from the
 virtual environment and from vLLM itself. The exclusions live in
@@ -485,6 +520,24 @@ Recall@1: 0.600
 Recall@3: 0.830
 Recall@5: 0.870
 Recall@10: 0.920
+```
+
+Answering a single question, retrieval included:
+
+```console
+$ uv run python -m src answer "What HTTP endpoint is used to dynamically load a LoRA adapter in vLLM?" --k 3
+The HTTP endpoint used to dynamically load a LoRA adapter in vLLM is `/v1/load_lora_adapter`.
+```
+
+Answering a whole dataset from its search results:
+
+```console
+$ uv run python -m src answer_dataset \
+    --student_search_results_path data/output/search_results/UnansweredQuestions/dataset_docs_public.json \
+    --save_directory data/output/search_results_and_answer/UnansweredQuestions
+Loaded 100 questions
+Answering: 100%|█████████████████| 100/100 [06:19<00:00,  3.79s/question]
+Saved student_search_results_and_answer to data/output/search_results_and_answer/UnansweredQuestions/dataset_docs_public.json
 ```
 
 Degenerate input is reported, never raised:
