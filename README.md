@@ -274,9 +274,27 @@ and never reached an answer, while the same prompt with thinking off
 answered correctly in 9 tokens and a fraction of the time. Every
 generation call therefore passes `enable_thinking=False`.
 
-Generation takes about 3.8 seconds per question on CPU, roughly six
-minutes for a hundred-question dataset. The subject sets no time limit
-on this stage.
+**`max_sources` is set to 10, matching retrieval's `k`, not a smaller
+number.** The gap between recall@10 and recall@5 (0.920 vs 0.870 on
+docs) means 5 questions out of 100 have their reference chunk ranked
+6th–10th: invisible to generation at `max_sources=5` even though
+retrieval already found it. Regenerating those 5 questions at
+`max_sources=10` fixed 3 of them outright — for example, a question
+asking for vLLM CPU's supported quantization methods went from "no
+specific methods are explicitly mentioned in the provided excerpts" to
+the correct `AWQ, GPTQ, compressed-tensor INT8 W8A8` with their
+architecture caveats. One question still got the wrong answer even
+with the right chunk present, which is the expected limit of a 0.6B
+model rather than a retrieval problem. The cost is real — mean context
+size roughly doubles (1,204 to 2,317 tokens) and generation slows from
+3.9 to 5.8 seconds per question — but the subject sets no time limit on
+this stage, so trading that time for a measured accuracy gain on 3–4%
+of questions is a reasonable default. It stays a constructor argument,
+so a stricter time budget can lower it back down.
+
+Generation takes about 5.8 seconds per question on CPU with this
+setting, roughly ten minutes for a hundred-question dataset. The
+subject sets no time limit on this stage.
 
 ## Performance analysis
 
@@ -536,7 +554,7 @@ $ uv run python -m src answer_dataset \
     --student_search_results_path data/output/search_results/UnansweredQuestions/dataset_docs_public.json \
     --save_directory data/output/search_results_and_answer/UnansweredQuestions
 Loaded 100 questions
-Answering: 100%|█████████████████| 100/100 [06:19<00:00,  3.79s/question]
+Answering: 100%|█████████████████| 100/100 [09:41<00:00,  5.81s/question]
 Saved student_search_results_and_answer to data/output/search_results_and_answer/UnansweredQuestions/dataset_docs_public.json
 ```
 
